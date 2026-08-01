@@ -6,9 +6,10 @@ const Footer = () => {
       component="footer"
       sx={{
         mt: "auto",
-        py: 2,
-        backgroundColor: "#f5f5f5",
-        borderTop: "1px solid #ddd",
+        py: 3,
+        backgroundColor: "background.paper",
+        borderTop: 1,
+        borderColor: "divider",
       }}
     >
       <Container maxWidth="lg">
@@ -16,8 +17,9 @@ const Footer = () => {
           align="center"
           variant="body2"
           color="text.secondary"
+          sx={{ lineHeight: 1.8 }}
         >
-          © {new Date().getFullYear()} Mini Chat. All rights reserved.
+          Hotel Inventory System · Inventory Management Laboratory · © 2026
         </Typography>
       </Container>
     </Box>

@@ -1,73 +1,51 @@
-import * as fileDb from "../helpers/fileDb";
-import { Location, LocationApi } from "../type";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 
-export const getAll = async (): Promise<Location[]> => {
-  return await fileDb.getLocations();
-};
+import { database } from "../database";
+import type { Location, LocationPayload, ResourceSummary } from "../types";
 
-export const getById = async (
-  id: string,
-): Promise<Location | null> => {
-  const locations = await fileDb.getLocations();
+interface LocationRow extends RowDataPacket, Location {}
 
-  return locations.find((location) => location.id === id) || null;
-};
+export type LocationRemovalResult = "deleted" | "notFound";
 
-export const create = async (
-  locationData: LocationApi,
-): Promise<Location> => {
-  const locations = await fileDb.getLocations();
-
-  const newLocation: Location = {
-    id: crypto.randomUUID(),
-    ...locationData,
-  };
-
-  locations.push(newLocation);
-
-  await fileDb.saveLocations(locations);
-
-  return newLocation;
-};
-
-export const update = async (
-  id: string,
-  locationData: LocationApi,
-): Promise<Location | null> => {
-  const locations = await fileDb.getLocations();
-
-  const location = locations.find(
-    (location) => location.id === id,
+export const getAll = async (): Promise<ResourceSummary[]> => {
+  const [rows] = await database.execute<LocationRow[]>(
+    "SELECT id, name FROM locations ORDER BY name",
   );
+  return rows.map(({ id, name }) => ({ id, name }));
+};
 
-  if (!location) {
-    return null;
-  }
+export const getById = async (id: string): Promise<Location | null> => {
+  const [rows] = await database.execute<LocationRow[]>(
+    "SELECT id, name, description FROM locations WHERE id = ? LIMIT 1",
+    [id],
+  );
+  return rows[0] ?? null;
+};
 
-  location.name = locationData.name;
-  location.description = locationData.description;
-
-  await fileDb.saveLocations(locations);
-
+export const create = async (locationData: LocationPayload): Promise<Location> => {
+  const location: Location = { id: crypto.randomUUID(), ...locationData };
+  await database.execute<ResultSetHeader>(
+    "INSERT INTO locations (id, name, description) VALUES (?, ?, ?)",
+    [location.id, location.name, location.description],
+  );
   return location;
 };
 
-export const remove = async (
-  id: string,
-): Promise<boolean> => {
-  const locations = await fileDb.getLocations();
-
-  const index = locations.findIndex(
-    (location) => location.id === id,
+export const update = async (id: string, locationData: LocationPayload): Promise<Location | null> => {
+  const [result] = await database.execute<ResultSetHeader>(
+    "UPDATE locations SET name = ?, description = ? WHERE id = ?",
+    [locationData.name, locationData.description, id],
   );
-
-  if (index === -1) {
-    return false;
+  if (result.affectedRows === 0) {
+    return null;
   }
+  return { id, ...locationData };
+};
 
-  locations.splice(index, 1);
-
-  await fileDb.saveLocations(locations);
-
-  return true;
+export const remove = async (id: string): Promise<LocationRemovalResult> => {
+  const [result] = await database.execute<ResultSetHeader>(
+    "DELETE FROM locations WHERE id = ?",
+    [id],
+  );
+  return result.affectedRows === 0 ? "notFound" : "deleted";
 };

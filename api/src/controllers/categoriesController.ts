@@ -1,123 +1,95 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 
+import { isForeignKeyConstraintError } from "../database";
 import * as categoriesService from "../services/categoriesService";
-import { CategoryApi } from "../type";
+import type { CategoryPayload } from "../types";
 
 interface IdParams {
   id: string;
 }
 
+const isCategoryPayload = (value: CategoryPayload): boolean => {
+  return Boolean(value.name.trim()) && Boolean(value.description.trim());
+};
+
 export const getAllCategories = async (
-  req: Request,
-  res: Response,
+  _request: Request,
+  response: Response,
 ): Promise<void> => {
   try {
-    const categories = await categoriesService.getAll();
-
-    res.status(200).json(categories);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to fetch categories.",
-    });
+    response.json(await categoriesService.getAll());
+  } catch {
+    response.status(500).json({ message: "Failed to fetch categories." });
   }
 };
 
 export const getCategoryById = async (
-  req: Request<IdParams>,
-  res: Response,
+  request: Request<IdParams>,
+  response: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
-
-    const category = await categoriesService.getById(id);
-
+    const category = await categoriesService.getById(request.params.id);
     if (!category) {
-      res.status(404).json({
-        message: "Category not found.",
-      });
-
+      response.status(404).json({ message: "Category not found." });
       return;
     }
-
-    res.status(200).json(category);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to fetch category.",
-    });
+    response.json(category);
+  } catch {
+    response.status(500).json({ message: "Failed to fetch category." });
   }
 };
 
 export const createCategory = async (
-  req: Request<{}, {}, CategoryApi>,
-  res: Response,
+  request: Request<Record<string, never>, unknown, CategoryPayload>,
+  response: Response,
 ): Promise<void> => {
+  if (!isCategoryPayload(request.body)) {
+    response.status(400).json({ message: "Name and description are required." });
+    return;
+  }
   try {
-    const category = await categoriesService.create(req.body);
-
-    res.status(201).json(category);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to create category.",
-    });
+    response.status(201).json(await categoriesService.create(request.body));
+  } catch {
+    response.status(500).json({ message: "Failed to create category." });
   }
 };
 
 export const updateCategory = async (
-  req: Request<IdParams, {}, CategoryApi>,
-  res: Response,
+  request: Request<IdParams, unknown, CategoryPayload>,
+  response: Response,
 ): Promise<void> => {
+  if (!isCategoryPayload(request.body)) {
+    response.status(400).json({ message: "Name and description are required." });
+    return;
+  }
   try {
-    const { id } = req.params;
-
-    const category = await categoriesService.update(id, req.body);
-
+    const category = await categoriesService.update(request.params.id, request.body);
     if (!category) {
-      res.status(404).json({
-        message: "Category not found.",
-      });
-
+      response.status(404).json({ message: "Category not found." });
       return;
     }
-
-    res.status(200).json(category);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to update category.",
-    });
+    response.json(category);
+  } catch {
+    response.status(500).json({ message: "Failed to update category." });
   }
 };
 
 export const deleteCategory = async (
-  req: Request<IdParams>,
-  res: Response,
+  request: Request<IdParams>,
+  response: Response,
 ): Promise<void> => {
   try {
-    const { id } = req.params;
-
-    const deleted = await categoriesService.remove(id);
-
-    if (!deleted) {
-      res.status(404).json({
-        message: "Category not found.",
-      });
-
+    const result = await categoriesService.remove(request.params.id);
+    if (result === "notFound") {
+      response.status(404).json({ message: "Category not found." });
       return;
     }
-
-    res.sendStatus(204);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to delete category.",
-    });
+    response.sendStatus(204);
+  } catch (error: unknown) {
+    if (isForeignKeyConstraintError(error)) {
+      response.status(409).json({ message: "Category is used by inventory items." });
+      return;
+    }
+    response.status(500).json({ message: "Failed to delete category." });
   }
 };

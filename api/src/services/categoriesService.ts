@@ -1,73 +1,51 @@
-import * as fileDb from "../helpers/fileDb";
-import { Category, CategoryApi } from "../type";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 
-export const getAll = async (): Promise<Category[]> => {
-  return await fileDb.getCategories();
-};
+import { database } from "../database";
+import type { Category, CategoryPayload, ResourceSummary } from "../types";
 
-export const getById = async (
-  id: string,
-): Promise<Category | null> => {
-  const categories = await fileDb.getCategories();
+interface CategoryRow extends RowDataPacket, Category {}
 
-  return categories.find((category) => category.id === id) || null;
-};
+export type CategoryRemovalResult = "deleted" | "notFound";
 
-export const create = async (
-  categoryData: CategoryApi,
-): Promise<Category> => {
-  const categories = await fileDb.getCategories();
-
-  const newCategory: Category = {
-    id: crypto.randomUUID(),
-    ...categoryData,
-  };
-
-  categories.push(newCategory);
-
-  await fileDb.saveCategories(categories);
-
-  return newCategory;
-};
-
-export const update = async (
-  id: string,
-  categoryData: CategoryApi,
-): Promise<Category | null> => {
-  const categories = await fileDb.getCategories();
-
-  const category = categories.find(
-    (category) => category.id === id,
+export const getAll = async (): Promise<ResourceSummary[]> => {
+  const [rows] = await database.execute<CategoryRow[]>(
+    "SELECT id, name FROM categories ORDER BY name",
   );
+  return rows.map(({ id, name }) => ({ id, name }));
+};
 
-  if (!category) {
-    return null;
-  }
+export const getById = async (id: string): Promise<Category | null> => {
+  const [rows] = await database.execute<CategoryRow[]>(
+    "SELECT id, name, description FROM categories WHERE id = ? LIMIT 1",
+    [id],
+  );
+  return rows[0] ?? null;
+};
 
-  category.name = categoryData.name;
-  category.description = categoryData.description;
-
-  await fileDb.saveCategories(categories);
-
+export const create = async (categoryData: CategoryPayload): Promise<Category> => {
+  const category: Category = { id: crypto.randomUUID(), ...categoryData };
+  await database.execute<ResultSetHeader>(
+    "INSERT INTO categories (id, name, description) VALUES (?, ?, ?)",
+    [category.id, category.name, category.description],
+  );
   return category;
 };
 
-export const remove = async (
-  id: string,
-): Promise<boolean> => {
-  const categories = await fileDb.getCategories();
-
-  const index = categories.findIndex(
-    (category) => category.id === id,
+export const update = async (id: string, categoryData: CategoryPayload): Promise<Category | null> => {
+  const [result] = await database.execute<ResultSetHeader>(
+    "UPDATE categories SET name = ?, description = ? WHERE id = ?",
+    [categoryData.name, categoryData.description, id],
   );
-
-  if (index === -1) {
-    return false;
+  if (result.affectedRows === 0) {
+    return null;
   }
+  return { id, ...categoryData };
+};
 
-  categories.splice(index, 1);
-
-  await fileDb.saveCategories(categories);
-
-  return true;
+export const remove = async (id: string): Promise<CategoryRemovalResult> => {
+  const [result] = await database.execute<ResultSetHeader>(
+    "DELETE FROM categories WHERE id = ?",
+    [id],
+  );
+  return result.affectedRows === 0 ? "notFound" : "deleted";
 };

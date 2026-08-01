@@ -4,7 +4,7 @@ export interface Category {
   description: string;
 }
 
-export interface CategoryApi {
+export interface CategoryPayload {
   name: string;
   description: string;
 }
@@ -15,25 +15,36 @@ export interface Location {
   description: string;
 }
 
-export interface LocationApi {
+export interface LocationPayload {
   name: string;
   description: string;
 }
 
 export interface Item {
   id: string;
-  name: string;
-  description: string;
   categoryId: string;
   locationId: string;
+  name: string;
+  description: string;
   image: string | null;
   createdAt: string;
 }
 
-export interface ItemApi {
-  name: string;
-  description: string;
+export interface ItemPayload {
   categoryId: string;
   locationId: string;
+  name: string;
+  description: string;
+  createdAt: string;
   image: string | null;
+}
+
+export interface ResourceSummary {
+  id: string;
+  name: string;
+}
+
+export interface ItemSummary extends ResourceSummary {
+  categoryId: string;
+  locationId: string;
 }

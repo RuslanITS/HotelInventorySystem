@@ -1,41 +1,23 @@
-import { Box, Button, Container, Typography } from "@mui/material";
-import { Link } from "react-router-dom";
+import { Box, Button, Paper, Typography } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 
 const NotFound = () => {
   return (
-    <Container maxWidth="md">
-      <Box
-        sx={{
-          minHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          textAlign: "center",
-          gap: 3,
-        }}
-      >
-        <Typography variant="h1" color="primary">
-          404
-        </Typography>
-
-        <Typography variant="h4">
-          Page Not Found
-        </Typography>
-
-        <Typography color="text.secondary">
-          Sorry, the page you are looking for doesn't exist.
-        </Typography>
-
-        <Button
-          component={Link}
-          to="/"
-          variant="contained"
-        >
-          Go Home
-        </Button>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: { xs: 3, md: 5 },
+        borderRadius: 3,
+        textAlign: "center",
+      }}
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+        <Typography variant="h2" color="primary" sx={{ fontWeight: 800 }}>404</Typography>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>Page not found</Typography>
+        <Typography color="text.secondary">The requested page does not exist.</Typography>
+        <Button component={RouterLink} to="/" variant="contained">Go home</Button>
       </Box>
-    </Container>
+    </Paper>
   );
 };
 

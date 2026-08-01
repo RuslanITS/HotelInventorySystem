@@ -1,73 +1,80 @@
-import * as fileDb from "../helpers/fileDb";
-import { Item, ItemApi } from "../type";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 
-export const getAll = async (): Promise<Item[]> => {
-  return await fileDb.getItems();
+import { database } from "../database";
+import { removeUploadedFile } from "../helpers/upload";
+import type { Item, ItemPayload, ItemSummary } from "../types";
+
+interface ItemRow extends RowDataPacket, Item {}
+
+export const getAll = async (): Promise<ItemSummary[]> => {
+  const [rows] = await database.execute<ItemRow[]>(
+    "SELECT id, name, category_id AS categoryId, location_id AS locationId FROM items ORDER BY created_at DESC, name",
+  );
+  return rows.map(({ id, name, categoryId, locationId }) => ({ id, name, categoryId, locationId }));
 };
 
-export const getById = async (
-  id: string,
-): Promise<Item | null> => {
-  const items = await fileDb.getItems();
-
-  return items.find((item) => item.id === id) || null;
+export const getById = async (id: string): Promise<Item | null> => {
+  const [rows] = await database.execute<ItemRow[]>(
+    "SELECT id, category_id AS categoryId, location_id AS locationId, name, description, image, created_at AS createdAt FROM items WHERE id = ? LIMIT 1",
+    [id],
+  );
+  return rows[0] ?? null;
 };
 
-export const create = async (
-  itemData: ItemApi,
-): Promise<Item> => {
-  const items = await fileDb.getItems();
-
-  const newItem: Item = {
-    id: crypto.randomUUID(),
-    ...itemData,
-    createdAt: new Date().toISOString(),
-  };
-
-  items.push(newItem);
-
-  await fileDb.saveItems(items);
-
-  return newItem;
+export const discardImage = async (imagePath: string | null): Promise<void> => {
+  await removeUploadedFile(imagePath);
 };
 
-export const update = async (
-  id: string,
-  itemData: ItemApi,
-): Promise<Item | null> => {
-  const items = await fileDb.getItems();
-
-  const item = items.find((item) => item.id === id);
-
-  if (!item) {
-    return null;
-  }
-
-  item.name = itemData.name;
-  item.description = itemData.description;
-  item.categoryId = itemData.categoryId;
-  item.locationId = itemData.locationId;
-  item.image = itemData.image;
-
-  await fileDb.saveItems(items);
-
+export const create = async (itemData: ItemPayload): Promise<Item> => {
+  const item: Item = { id: crypto.randomUUID(), ...itemData };
+  await database.execute<ResultSetHeader>(
+    "INSERT INTO items (id, category_id, location_id, name, description, image, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [
+      item.id,
+      item.categoryId,
+      item.locationId,
+      item.name,
+      item.description,
+      item.image,
+      item.createdAt,
+    ],
+  );
   return item;
 };
 
-export const remove = async (
-  id: string,
-): Promise<boolean> => {
-  const items = await fileDb.getItems();
+export const update = async (id: string, itemData: ItemPayload): Promise<Item | null> => {
+  const existingItem = await getById(id);
+  if (!existingItem) {
+    return null;
+  }
 
-  const index = items.findIndex((item) => item.id === id);
+  await database.execute<ResultSetHeader>(
+    "UPDATE items SET category_id = ?, location_id = ?, name = ?, description = ?, image = ?, created_at = ? WHERE id = ?",
+    [
+      itemData.categoryId,
+      itemData.locationId,
+      itemData.name,
+      itemData.description,
+      itemData.image,
+      itemData.createdAt,
+      id,
+    ],
+  );
 
-  if (index === -1) {
+  if (existingItem.image !== itemData.image) {
+    await removeUploadedFile(existingItem.image);
+  }
+
+  return { id, ...itemData };
+};
+
+export const remove = async (id: string): Promise<boolean> => {
+  const item = await getById(id);
+  if (!item) {
     return false;
   }
 
-  items.splice(index, 1);
-
-  await fileDb.saveItems(items);
-
+  await database.execute<ResultSetHeader>("DELETE FROM items WHERE id = ?", [id]);
+  await removeUploadedFile(item.image);
   return true;
 };

@@ -1,123 +1,86 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 
+import { isForeignKeyConstraintError } from "../database";
 import * as locationsService from "../services/locationsService";
-import { LocationApi } from "../type";
+import type { LocationPayload } from "../types";
 
 interface IdParams {
   id: string;
 }
 
-export const getAllLocations = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
+const isLocationPayload = (value: LocationPayload): boolean => {
+  return Boolean(value.name.trim()) && Boolean(value.description.trim());
+};
+
+export const getAllLocations = async (_request: Request, response: Response): Promise<void> => {
   try {
-    const locations = await locationsService.getAll();
-
-    res.status(200).json(locations);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to fetch locations.",
-    });
+    response.json(await locationsService.getAll());
+  } catch {
+    response.status(500).json({ message: "Failed to fetch locations." });
   }
 };
 
-export const getLocationById = async (
-  req: Request<IdParams>,
-  res: Response,
-): Promise<void> => {
+export const getLocationById = async (request: Request<IdParams>, response: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-
-    const location = await locationsService.getById(id);
-
+    const location = await locationsService.getById(request.params.id);
     if (!location) {
-      res.status(404).json({
-        message: "Location not found.",
-      });
-
+      response.status(404).json({ message: "Location not found." });
       return;
     }
-
-    res.status(200).json(location);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to fetch location.",
-    });
+    response.json(location);
+  } catch {
+    response.status(500).json({ message: "Failed to fetch location." });
   }
 };
 
 export const createLocation = async (
-  req: Request<{}, {}, LocationApi>,
-  res: Response,
+  request: Request<Record<string, never>, unknown, LocationPayload>,
+  response: Response,
 ): Promise<void> => {
+  if (!isLocationPayload(request.body)) {
+    response.status(400).json({ message: "Name and description are required." });
+    return;
+  }
   try {
-    const location = await locationsService.create(req.body);
-
-    res.status(201).json(location);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to create location.",
-    });
+    response.status(201).json(await locationsService.create(request.body));
+  } catch {
+    response.status(500).json({ message: "Failed to create location." });
   }
 };
 
 export const updateLocation = async (
-  req: Request<IdParams, {}, LocationApi>,
-  res: Response,
+  request: Request<IdParams, unknown, LocationPayload>,
+  response: Response,
 ): Promise<void> => {
+  if (!isLocationPayload(request.body)) {
+    response.status(400).json({ message: "Name and description are required." });
+    return;
+  }
   try {
-    const { id } = req.params;
-
-    const location = await locationsService.update(id, req.body);
-
+    const location = await locationsService.update(request.params.id, request.body);
     if (!location) {
-      res.status(404).json({
-        message: "Location not found.",
-      });
-
+      response.status(404).json({ message: "Location not found." });
       return;
     }
-
-    res.status(200).json(location);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to update location.",
-    });
+    response.json(location);
+  } catch {
+    response.status(500).json({ message: "Failed to update location." });
   }
 };
 
-export const deleteLocation = async (
-  req: Request<IdParams>,
-  res: Response,
-): Promise<void> => {
+export const deleteLocation = async (request: Request<IdParams>, response: Response): Promise<void> => {
   try {
-    const { id } = req.params;
-
-    const deleted = await locationsService.remove(id);
-
-    if (!deleted) {
-      res.status(404).json({
-        message: "Location not found.",
-      });
-
+    const result = await locationsService.remove(request.params.id);
+    if (result === "notFound") {
+      response.status(404).json({ message: "Location not found." });
       return;
     }
-
-    res.sendStatus(204);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to delete location.",
-    });
+    response.sendStatus(204);
+  } catch (error: unknown) {
+    if (isForeignKeyConstraintError(error)) {
+      response.status(409).json({ message: "Location is used by inventory items." });
+      return;
+    }
+    response.status(500).json({ message: "Failed to delete location." });
   }
 };
